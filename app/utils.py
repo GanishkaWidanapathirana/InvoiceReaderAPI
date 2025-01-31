@@ -1,6 +1,4 @@
 import os
-
-
 def save_file(uploaded_file, destination_folder="data/uploads/"):
     """
     Save an uploaded file to a specified directory.

@@ -2,3 +2,5 @@ fastapi~=0.115.7
 uvicorn
 llama-index
 google_generativeai
+python-dotenv
+llama-parse
