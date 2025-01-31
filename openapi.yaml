@@ -1,0 +1,146 @@
+openapi: 3.0.3
+info:
+  title: Invoice Analysis API
+  description: API for uploading invoices and processing them to provide analysis.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  version: 1.0.0
+servers:
+  - url: http://localhost:8000
+paths:
+  /upload:
+    post:
+      summary: Upload an invoice and analyze its details
+      description: Uploads an invoice file and processes it to return invoice details, suggestions, and an email body.
+      operationId: uploadInvoice
+      tags:
+        - Invoice Analysis
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The invoice file to be uploaded.
+                user_type:
+                  type: string
+                  description: The type of user (e.g., vendor or buyer).
+      responses:
+        '200':
+          description: Invoice processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  response:
+                    type: object
+                    properties:
+                      invoice_number:
+                        type: string
+                        example: "INV-12345"
+                      amount:
+                        type: number
+                        format: float
+                        example: 1000.0
+                      due_date:
+                        type: string
+                        format: date
+                        example: "2024-02-28"
+                      payment_status:
+                        type: string
+                        example: "overdue"
+                      discount_rate:
+                        type: number
+                        format: float
+                        nullable: true
+                        example: null
+                      late_fee:
+                        type: number
+                        format: float
+                        nullable: true
+                        example: null
+                      grace_period:
+                        type: string
+                        example: "7 days"
+                      vendor_name:
+                        type: string
+                        example: "Sample Vendor Inc."
+                      buyer_name:
+                        type: string
+                        example: "Sample Buyer Ltd."
+                      suggestions:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            type:
+                              type: string
+                              example: "overdue"
+                            action:
+                              type: string
+                              example: "The invoice is overdue. Please reach out to the vendor for payment."
+                      email_body:
+                        type: object
+                        properties:
+                          subject:
+                            type: string
+                            example: "Overdue Invoice: INV-12345"
+                          body:
+                            type: string
+                            example: |
+                              Dear Sample Vendor Inc.,
+
+                              This email is to inform you that invoice INV-12345 for $1000.00, which was due on 2024-02-28, is overdue. Please contact us to discuss payment arrangements.
+
+                              Best regards,
+                              Sample Buyer Ltd.
+        '400':
+          description: Bad request
+        '500':
+          description: Internal server error
+components:
+  schemas:
+    Invoice:
+      type: object
+      properties:
+        invoice_number:
+          type: string
+        amount:
+          type: number
+        due_date:
+          type: string
+        payment_status:
+          type: string
+        discount_rate:
+          type: number
+          nullable: true
+        late_fee:
+          type: number
+          nullable: true
+        grace_period:
+          type: string
+        vendor_name:
+          type: string
+        buyer_name:
+          type: string
+        suggestions:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+              action:
+                type: string
+        email_body:
+          type: object
+          properties:
+            subject:
+              type: string
+            body:
+              type: string
