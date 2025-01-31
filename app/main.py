@@ -14,7 +14,7 @@ if not API_KEY:
     raise ValueError("GOOGLE_CLOUD_API_KEY is not set in the .env file.")
 
 
-@app.post("/upload/")
+@app.post("/upload")
 async def upload_invoice(
         file: UploadFile = File(...),
         user_type: str = Form(...),  # "vendor" or "buyer"
