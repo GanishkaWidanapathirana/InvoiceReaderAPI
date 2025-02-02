@@ -86,7 +86,7 @@ async def query_llm(documents, user_type: str):
         '- If the invoice is due soon (within 5 days), suggest early payment incentives (for vendors) or extension requests (for buyers). '
         '- If the invoice is not due soon, suggest monitoring options. '
         'Only return suggestions and email body relevant to the **{user_type}**. '
-        'Make sure to add suggestions and email body as JSON fields. '
+        'Make sure to add suggestions and email body as JSON fields to above Json structure.Need only one structure. '
         'In the email body, address the user based on the role: '
         '- If the user is a **buyer**, start the email with "Dear vendor_name" and sign off with "Best regards, your_name". '
         '- If the user is a **vendor**, start the email with "Dear buyer_name" and sign off with "Best regards, your_name". '
