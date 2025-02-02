@@ -7,7 +7,7 @@ import os
 # Load environment variables from the .env file
 load_dotenv()
 app = FastAPI()
-
+print("App started")
 # Access the API key from the environment
 API_KEY = os.getenv("GOOGLE_CLOUD_API_KEY")
 if not API_KEY:

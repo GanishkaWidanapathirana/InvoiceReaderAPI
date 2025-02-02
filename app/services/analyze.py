@@ -131,11 +131,15 @@ async def process_invoice(uploaded_file, user_type: str):
     # Save the uploaded file to a temporary directory
     temp_dir = "data/temp_uploads"
     file_path = save_file(uploaded_file, destination_folder=temp_dir)
+    try:
+        # Parse Invoice
+        documents = await parse_invoice(file_path)
 
-    # Parse Invoice
-    documents = await parse_invoice(file_path)
-
-    # Query LLM step-by-step
-    raw_responses = await query_llm(documents, user_type)
-    # Clean JSON Responses
-    return parse_invoice_response(raw_responses)
+        # Query LLM step-by-step
+        raw_responses = await query_llm(documents, user_type)
+        # Clean JSON Responses
+        return parse_invoice_response(raw_responses)
+    finally:
+        # Ensure the file is deleted after processing, even if an error occurs
+        if os.path.exists(file_path):
+            os.remove(file_path)
