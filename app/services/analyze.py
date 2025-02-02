@@ -24,21 +24,37 @@ if not LLAMA_CLOUD_API_KEY:
 embed_model = GeminiEmbedding(api_key=GEMINI_API_KEY, model_name="models/embedding-001", )
 llm = Gemini(model="models/gemini-1.5-flash", api_key=GEMINI_API_KEY)
 
-async def parse_invoice(file_path: str):
-    """Parses the uploaded invoice using LlamaParse."""
+
+async def parse_invoice(file_path):
+    """Handles both PDFs and images (JPEG, PNG) using LlamaParse."""
+
     parser = LlamaParse(
         api_key=LLAMA_CLOUD_API_KEY,
         result_type="markdown",
         verbose=True
     )
-    file_extractor = {".pdf": parser}
-    reader = SimpleDirectoryReader(input_files=[file_path], file_extractor=file_extractor)
 
+    # Define supported file types for LlamaParse
+    file_extractor = {
+        ".pdf": parser,  # PDF parsing (including OCR for scanned PDFs)
+        ".jpeg": parser,  # Image OCR
+        ".jpg": parser,
+        ".png": parser
+    }
+
+    # Get file extension
+    _, ext = os.path.splitext(file_path)
+    ext = ext.lower()
+
+    if ext not in file_extractor:
+        raise ValueError(f"Unsupported file type: {ext}")
+
+    # Process the file with LlamaParse
+    reader = SimpleDirectoryReader(input_files=[file_path], file_extractor=file_extractor)
     documents = await reader.aload_data()
     if not documents:
         raise ValueError("The uploaded PDF is empty or could not be parsed.")
-
-    return documents
+    return documents  # Returns extracted text from PDF or image
 
 
 async def query_llm(documents, user_type: str):
