@@ -1,8 +1,10 @@
-from fastapi import FastAPI, File, UploadFile, Form
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.responses import JSONResponse
+from fastapi.responses import StreamingResponse
 from starlette.middleware.cors import CORSMiddleware
 
-from app.services.analyze import process_invoice
+from app.services.analyze import process_invoice, load_document_by_id_and_create_index, \
+    get_chat_query_response
 from dotenv import load_dotenv
 import os
 
@@ -42,3 +44,24 @@ async def upload_invoice(
         return JSONResponse(content={"response": response})
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.post("/ask_chat")
+async def ask_chat(query: str = Form(...), doc_id: str = Form(...)):
+    """Endpoint to handle chat queries and return full response as JSON."""
+
+    try:
+        # Load the document index
+        index = load_document_by_id_and_create_index(doc_id)
+
+        # Get the response from the chat engine
+        full_response = await get_chat_query_response(index, query)
+
+        # Return the response as JSON
+        return JSONResponse(content={"response": full_response})
+
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        print(f"Error: {e}")
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")

@@ -1,12 +1,16 @@
 import os
 import json
 import re
-from datetime import datetime
+from datetime import datetime, time
+from typing import AsyncGenerator
 
+import chromadb
 from dotenv import load_dotenv
-from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
+from fastapi import HTTPException
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Settings, StorageContext
 from llama_index.llms.gemini import Gemini
 from llama_index.embeddings.gemini import GeminiEmbedding
+from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_parse import LlamaParse
 from app.utils import save_file
 
@@ -23,6 +27,9 @@ if not LLAMA_CLOUD_API_KEY:
 # Initialize Gemini
 embed_model = GeminiEmbedding(api_key=GEMINI_API_KEY, model_name="models/embedding-001", )
 llm = Gemini(model="models/gemini-1.5-flash", api_key=GEMINI_API_KEY)
+
+# Initialize ChromaDB client
+db = chromadb.PersistentClient(path="./chroma_db")
 
 
 async def parse_invoice(file_path):
@@ -59,7 +66,21 @@ async def parse_invoice(file_path):
 
 async def query_llm(documents, user_type: str):
     """Queries LLM to analyze invoice details and generate suggestions."""
-    index = VectorStoreIndex.from_documents(documents, llm=llm, embed_model=embed_model)
+    # Set Global settings
+    Settings.llm = llm
+    Settings.embed_model = embed_model
+    print(documents)
+    # Get document ID immediately after insertion
+    new_doc_id = documents[0].id_  # Get the first document's unique ID
+    # Create or get the collection
+    chroma_collection = db.get_or_create_collection(new_doc_id)
+    # Create a vector store with ChromaDB
+    vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
+    storage_context = StorageContext.from_defaults(vector_store=vector_store)
+
+    # Store document in ChromaDB
+    index = VectorStoreIndex.from_documents(documents, storage_context=storage_context, llm=llm,
+                                            embed_model=embed_model)
     query_engine = index.as_query_engine(llm=llm)
 
     # Get today's date in YYYY-MM-DD format
@@ -96,7 +117,7 @@ async def query_llm(documents, user_type: str):
     ).format(current_date=current_date, user_type=user_type)
 
     response = query_engine.query(invoice_analysis_query)
-    return clean_json_response(response.response)
+    return clean_json_response(response.response), new_doc_id
 
 
 def clean_json_response(response_text: str):
@@ -108,7 +129,7 @@ def clean_json_response(response_text: str):
         raise ValueError("Response from Gemini is not in the expected JSON format.")
 
 
-def parse_invoice_response(response: dict):
+def parse_invoice_response(response: dict, doc_id: str):
     try:
         # Ensure the response is a dictionary, if it's not a string
         if isinstance(response, str):
@@ -118,6 +139,7 @@ def parse_invoice_response(response: dict):
 
         # Ensure 'null' values are handled properly and set if any value is null
         parsed_response = {
+            "document_id": doc_id,
             "invoice_number": parsed_response.get("invoice_number", None),
             "amount": parsed_response.get("amount", None),
             "due_date": parsed_response.get("due_date", None),
@@ -140,6 +162,40 @@ def parse_invoice_response(response: dict):
         return {"error": "Invalid response format"}
 
 
+def load_document_by_id_and_create_index(doc_id: str):
+    """Find a document by its ID and create a vector index."""
+
+    # Initialize ChromaDB client
+    db2 = chromadb.PersistentClient(path="./chroma_db")
+
+    # Retrieve or create the collection for the given doc_id
+    chroma_collection2 = db2.get_or_create_collection(doc_id)
+
+    if not chroma_collection2.get():  # Check if document exists
+        raise ValueError(f"Document with ID {doc_id} not found.")
+
+    # Create the vector store and index
+    vector_store = ChromaVectorStore(chroma_collection=chroma_collection2)
+    storage_context = StorageContext.from_defaults(vector_store=vector_store)
+
+    index = VectorStoreIndex.from_vector_store(
+        vector_store,
+        embed_model=embed_model,
+        llm=llm  # Add the LLM here
+    )
+
+    return index
+
+
+async def get_chat_query_response(index: VectorStoreIndex, question: str):
+    """Query the vector index with a question and return the full response as a string."""
+
+    query_engine = index.as_chat_engine(streaming=False, llm=llm)  # Disable streaming
+    response = query_engine.chat(question)  # Get full response at once
+
+    return response.response  # Return the full response text
+
+
 async def process_invoice(uploaded_file, user_type: str):
     """Main function to handle invoice processing and response formatting."""
     if user_type not in ["vendor", "buyer"]:
@@ -153,9 +209,9 @@ async def process_invoice(uploaded_file, user_type: str):
         documents = await parse_invoice(file_path)
 
         # Query LLM step-by-step
-        raw_responses = await query_llm(documents, user_type)
+        raw_responses, doc_id = await query_llm(documents, user_type)
         # Clean JSON Responses
-        return parse_invoice_response(raw_responses)
+        return parse_invoice_response(raw_responses, doc_id)
     finally:
         # Ensure the file is deleted after processing, even if an error occurs
         if os.path.exists(file_path):

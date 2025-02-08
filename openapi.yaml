@@ -35,72 +35,45 @@ paths:
           content:
             application/json:
               schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+        '400':
+          description: Bad request
+        '500':
+          description: Internal server error
+  /ask_chat:
+    post:
+      summary: Handle chat queries and return full response
+      description: Accepts a chat query and document ID, retrieves relevant data, and returns a JSON response.
+      operationId: askChat
+      tags:
+        - Chat Analysis
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                query:
+                  type: string
+                  description: The chat query to process.
+                doc_id:
+                  type: string
+                  description: The document ID to retrieve relevant data.
+      responses:
+        '200':
+          description: Chat response returned successfully
+          content:
+            application/json:
+              schema:
                 type: object
                 properties:
                   response:
-                    type: object
-                    properties:
-                      invoice_number:
-                        type: string
-                        example: "INV-12345"
-                      amount:
-                        type: number
-                        format: float
-                        example: 1000.0
-                      due_date:
-                        type: string
-                        format: date
-                        example: "2024-02-28"
-                      payment_status:
-                        type: string
-                        example: "overdue"
-                      discount_rate:
-                        type: number
-                        format: float
-                        nullable: true
-                        example: null
-                      late_fee:
-                        type: number
-                        format: float
-                        nullable: true
-                        example: null
-                      grace_period:
-                        type: string
-                        example: "7 days"
-                      vendor_name:
-                        type: string
-                        example: "Sample Vendor Inc."
-                      buyer_name:
-                        type: string
-                        example: "Sample Buyer Ltd."
-                      suggestions:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            type:
-                              type: string
-                              example: "overdue"
-                            action:
-                              type: string
-                              example: "The invoice is overdue. Please reach out to the vendor for payment."
-                      email_body:
-                        type: object
-                        properties:
-                          subject:
-                            type: string
-                            example: "Overdue Invoice: INV-12345"
-                          body:
-                            type: string
-                            example: |
-                              Dear Sample Vendor Inc.,
-
-                              This email is to inform you that invoice INV-12345 for $1000.00, which was due on 2024-02-28, is overdue. Please contact us to discuss payment arrangements.
-
-                              Best regards,
-                              Sample Buyer Ltd.
+                    type: string
+                    description: The full response from the chat engine.
         '400':
           description: Bad request
+        '404':
+          description: Document not found
         '500':
           description: Internal server error
 components:
@@ -144,3 +117,8 @@ components:
               type: string
             body:
               type: string
+    InvoiceResponse:
+      type: object
+      properties:
+        response:
+          $ref: '#/components/schemas/Invoice'
