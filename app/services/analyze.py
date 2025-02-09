@@ -2,17 +2,21 @@ import os
 import json
 import re
 from datetime import datetime, time
-from typing import AsyncGenerator
 
 import chromadb
 from dotenv import load_dotenv
-from fastapi import HTTPException
+from fastapi import HTTPException, Depends
 from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Settings, StorageContext
 from llama_index.llms.gemini import Gemini
 from llama_index.embeddings.gemini import GeminiEmbedding
 from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_parse import LlamaParse
+
+from app.database import schemas
+from app.database.database import get_db
+from app.models import models
 from app.utils import save_file
+from sqlalchemy.orm import Session
 
 # Load environment variables
 load_dotenv()
@@ -109,7 +113,7 @@ async def query_llm(documents, user_type: str):
         'Only return suggestions and email body relevant to the **{user_type}**. '
         'Make sure to add suggestions and email body as JSON fields to above Json structure.Need only one structure. '
         'Make sure add only suggestions as list.as example [suggestion1,suggestion2,suggestion3]. no need another action part '
-        'In the email body, address the user based on the role: '
+        'In the email body, address the user based on the role,Only need email body.: '
         '- If the user is a **buyer**, start the email with "Dear vendor_name" and sign off with "Best regards, your_name". '
         '- If the user is a **vendor**, start the email with "Dear buyer_name" and sign off with "Best regards, your_name". '
         'Ensure that the email tone is polite and professional based on the role (buyer or vendor). '
@@ -150,10 +154,7 @@ def parse_invoice_response(response: dict, doc_id: str):
             "vendor_name": parsed_response.get("vendor_name", None),
             "buyer_name": parsed_response.get("buyer_name", None),
             "suggestions": parsed_response.get("suggestions", []),
-            "email_body": parsed_response.get("email_body", {
-                "subject": None,
-                "body": None
-            })
+            "email_body": parsed_response.get("email_body", None)
         }
 
         return parsed_response
@@ -196,6 +197,33 @@ async def get_chat_query_response(index: VectorStoreIndex, question: str):
     return response.response  # Return the full response text
 
 
+def create_invoice(parsed_invoice, mysql_db: Session = Depends(get_db)):
+    try:
+        # Convert the parsed response to database model
+        db_invoice = models.Invoice(
+            document_id=parsed_invoice["document_id"],
+            invoice_number=parsed_invoice["invoice_number"],
+            amount=parsed_invoice["amount"],
+            due_date=datetime.strptime(parsed_invoice["due_date"], "%Y-%m-%d").date() if parsed_invoice[
+                "due_date"] else None,
+            payment_status=parsed_invoice["payment_status"],
+            discount_rate=parsed_invoice["discount_rate"],
+            late_fee=parsed_invoice["late_fee"],
+            grace_period=parsed_invoice["grace_period"],
+            vendor_name=parsed_invoice["vendor_name"],
+            buyer_name=parsed_invoice["buyer_name"],
+            suggestions=parsed_invoice["suggestions"],
+            email_body=parsed_invoice["email_body"]
+        )
+        mysql_db.add(db_invoice)
+        mysql_db.commit()
+        mysql_db.refresh(db_invoice)
+        return db_invoice
+    except Exception as e:
+        mysql_db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 async def process_invoice(uploaded_file, user_type: str):
     """Main function to handle invoice processing and response formatting."""
     if user_type not in ["vendor", "buyer"]:
@@ -211,7 +239,9 @@ async def process_invoice(uploaded_file, user_type: str):
         # Query LLM step-by-step
         raw_responses, doc_id = await query_llm(documents, user_type)
         # Clean JSON Responses
-        return parse_invoice_response(raw_responses, doc_id)
+        parsed_invoice = parse_invoice_response(raw_responses, doc_id)
+        create_invoice(parsed_invoice,)
+        return parsed_invoice
     finally:
         # Ensure the file is deleted after processing, even if an error occurs
         if os.path.exists(file_path):

@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from fastapi.responses import StreamingResponse
 from starlette.middleware.cors import CORSMiddleware
 
+from app.models import models
 from app.services.analyze import process_invoice, load_document_by_id_and_create_index, \
     get_chat_query_response
 from dotenv import load_dotenv
@@ -17,6 +18,12 @@ API_KEY = os.getenv("GOOGLE_CLOUD_API_KEY")
 if not API_KEY:
     raise ValueError("GOOGLE_CLOUD_API_KEY is not set in the .env file.")
 # Define the origins you want to allow. For example, localhost:10000 is your frontend.
+
+from database.database import engine, get_db
+# Create database tables
+
+models.Base.metadata.create_all(bind=engine)
+
 origins = [
     "http://localhost:10000",  # Allow your frontend
     "http://localhost",  # Allow localhost without port
