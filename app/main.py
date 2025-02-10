@@ -1,6 +1,7 @@
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends, Query
 from fastapi.responses import JSONResponse
 from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
 from starlette.middleware.cors import CORSMiddleware
 
 from app.models import models
@@ -19,7 +20,8 @@ if not API_KEY:
     raise ValueError("GOOGLE_CLOUD_API_KEY is not set in the .env file.")
 # Define the origins you want to allow. For example, localhost:10000 is your frontend.
 
-from database.database import engine, get_db
+from app.database.database import engine, get_db
+
 # Create database tables
 
 models.Base.metadata.create_all(bind=engine)
@@ -45,9 +47,10 @@ app.add_middleware(
 async def upload_invoice(
         file: UploadFile = File(...),
         user_type: str = Form(...),  # "vendor" or "buyer"
+        user_email: str = Form(...),
 ):
     try:
-        response = await process_invoice(file, user_type)
+        response = await process_invoice(file, user_type, user_email)
         return JSONResponse(content={"response": response})
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
@@ -72,3 +75,14 @@ async def ask_chat(query: str = Form(...), doc_id: str = Form(...)):
     except Exception as e:
         print(f"Error: {e}")
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+
+
+@app.get("/invoices/by-email")
+def get_invoices_by_email(user_email: str = Query(...), db: Session = Depends(get_db)):
+    print("came")
+    invoices = db.query(models.Invoice).filter(models.Invoice.user_email == str(user_email)).all()
+
+    if not invoices:
+        raise HTTPException(status_code=404, detail="No invoices found for this email")
+
+    return invoices

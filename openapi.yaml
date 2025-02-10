@@ -76,6 +76,33 @@ paths:
           description: Document not found
         '500':
           description: Internal server error
+  /invoices/by-email:
+    get:
+      summary: Retrieve invoices by user email
+      description: Fetches all invoices associated with a given user email.
+      operationId: getInvoicesByEmail
+      tags:
+        - Invoice Retrieval
+      parameters:
+        - name: user_email
+          in: query
+          required: true
+          schema:
+            type: string
+          description: The email address of the user to retrieve invoices for.
+      responses:
+        '200':
+          description: Successfully retrieved invoices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Invoice'
+        '404':
+          description: No invoices found for this email
+        '500':
+          description: Internal server error
 components:
   schemas:
     Invoice:

@@ -1,6 +1,7 @@
 import os
 import json
 import re
+import traceback
 from datetime import datetime, time
 
 import chromadb
@@ -11,9 +12,7 @@ from llama_index.llms.gemini import Gemini
 from llama_index.embeddings.gemini import GeminiEmbedding
 from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_parse import LlamaParse
-
-from app.database import schemas
-from app.database.database import get_db
+from app.database.database import get_db, SessionLocal
 from app.models import models
 from app.utils import save_file
 from sqlalchemy.orm import Session
@@ -197,35 +196,44 @@ async def get_chat_query_response(index: VectorStoreIndex, question: str):
     return response.response  # Return the full response text
 
 
-def create_invoice(parsed_invoice, mysql_db: Session = Depends(get_db)):
+def create_invoice(parsed_invoice, user_email: str):
+    invoicedb = SessionLocal()  # Manually create session
     try:
-        # Convert the parsed response to database model
+        # Convert all fields to strings
         db_invoice = models.Invoice(
-            document_id=parsed_invoice["document_id"],
-            invoice_number=parsed_invoice["invoice_number"],
-            amount=parsed_invoice["amount"],
-            due_date=datetime.strptime(parsed_invoice["due_date"], "%Y-%m-%d").date() if parsed_invoice[
-                "due_date"] else None,
-            payment_status=parsed_invoice["payment_status"],
-            discount_rate=parsed_invoice["discount_rate"],
-            late_fee=parsed_invoice["late_fee"],
-            grace_period=parsed_invoice["grace_period"],
-            vendor_name=parsed_invoice["vendor_name"],
-            buyer_name=parsed_invoice["buyer_name"],
-            suggestions=parsed_invoice["suggestions"],
-            email_body=parsed_invoice["email_body"]
+            document_id=str(parsed_invoice["document_id"]),
+            invoice_number=str(parsed_invoice["invoice_number"]),
+            amount=str(parsed_invoice["amount"]) if parsed_invoice["amount"] is not None else None,
+            due_date=str(parsed_invoice["due_date"]) if parsed_invoice["due_date"] else None,
+            payment_status=str(parsed_invoice["payment_status"]),
+            discount_rate=str(parsed_invoice["discount_rate"]) if parsed_invoice["discount_rate"] is not None else None,
+            late_fee=str(parsed_invoice["late_fee"]) if parsed_invoice["late_fee"] is not None else None,
+            grace_period=str(parsed_invoice["grace_period"]),
+            vendor_name=str(parsed_invoice["vendor_name"]),
+            buyer_name=str(parsed_invoice["buyer_name"]),
+            suggestions=json.dumps(parsed_invoice["suggestions"]),
+            user_email=str(user_email)
         )
-        mysql_db.add(db_invoice)
-        mysql_db.commit()
-        mysql_db.refresh(db_invoice)
-        return db_invoice
+
+        invoicedb.add(db_invoice)
+        print("Added invoice to session")
+
+        invoicedb.commit()
+        print("Committed to database")
+
+        invoicedb.refresh(db_invoice)
+
     except Exception as e:
-        mysql_db.rollback()
+        invoicedb.rollback()
+        print("Error:", str(e))
         raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        invoicedb.close()
 
 
-async def process_invoice(uploaded_file, user_type: str):
+async def process_invoice(uploaded_file, user_type: str, user_email: str):
     """Main function to handle invoice processing and response formatting."""
+
     if user_type not in ["vendor", "buyer"]:
         raise ValueError("Invalid user type. Must be 'vendor' or 'buyer'.")
 
@@ -235,12 +243,11 @@ async def process_invoice(uploaded_file, user_type: str):
     try:
         # Parse Invoice
         documents = await parse_invoice(file_path)
-
         # Query LLM step-by-step
         raw_responses, doc_id = await query_llm(documents, user_type)
         # Clean JSON Responses
         parsed_invoice = parse_invoice_response(raw_responses, doc_id)
-        create_invoice(parsed_invoice,)
+        create_invoice(parsed_invoice, user_email)
         return parsed_invoice
     finally:
         # Ensure the file is deleted after processing, even if an error occurs
