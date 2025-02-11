@@ -11,7 +11,7 @@ RUN pip3 install -r requirements.txt
 COPY . .
 
 # Run the FastAPI application using Uvicorn during development
-CMD ["uvicorn", "app.services.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.services.main:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-keep-alive", "120"]
 
 # Production stage
 FROM python:alpine AS production
@@ -34,4 +34,4 @@ USER 10016
 EXPOSE 8000
 
 # Start the FastAPI application using Uvicorn in production
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.services.main:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-keep-alive", "120"]
