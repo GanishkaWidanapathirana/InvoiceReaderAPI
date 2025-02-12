@@ -13,7 +13,7 @@ MYSQL_HOST = os.getenv("CHOREO_INVOICE_DB_HOSTNAME")
 MYSQL_PORT = os.getenv("CHOREO_INVOICE_DB_PORT")
 MYSQL_DATABASE = os.getenv("CHOREO_INVOICE_DB_DATABASENAME")
 print(MYSQL_USER,MYSQL_PORT)
-SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
+SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}?ssl_ca=DigiCertGlobalRootCA.crt.pem"
 
 engine = create_engine(SQLALCHEMY_DATABASE_URL, echo=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
