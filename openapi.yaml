@@ -29,6 +29,9 @@ paths:
                 user_type:
                   type: string
                   description: The type of user (e.g., vendor or buyer).
+                user_email:
+                  type: string
+                  description: The email id of current user (e.g., example@domain.com).
       responses:
         '200':
           description: Invoice processed successfully
