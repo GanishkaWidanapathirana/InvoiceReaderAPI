@@ -169,7 +169,8 @@ def load_document_by_id_and_create_index(doc_id: str):
     db2 = chromadb.PersistentClient(path="./chroma_db")
 
     # Retrieve or create the collection for the given doc_id
-    chroma_collection2 = db2.get_or_create_collection(doc_id)
+    chroma_collection2 = db2.get_collection(doc_id)
+    print(chroma_collection2)
 
     if not chroma_collection2.get():  # Check if document exists
         raise ValueError(f"Document with ID {doc_id} not found.")
